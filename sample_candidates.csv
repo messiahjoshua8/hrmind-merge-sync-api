@@ -1,0 +1,4 @@
+first_name,last_name,email,phone_number,current_company,current_title,resume_url,referred_by,skills,past_titles,years_experience,resume_text
+John,Doe,john.doe@example.com,123-456-7890,ABC Corp,Senior Developer,https://example.com/resume1.pdf,Jane Smith,"Python, SQL, JavaScript","Junior Developer, Developer",8,"Experienced software developer with 8 years of experience in Python and web development."
+Jane,Smith,jane.smith@example.com,234-567-8901,XYZ Inc,Product Manager,https://example.com/resume2.pdf,,,Project Coordinator,5,"Product manager with experience in agile methodologies and cross-functional team leadership."
+Michael,Johnson,mike.j@example.com,345-678-9012,Tech Solutions,DevOps Engineer,https://example.com/resume3.pdf,Bob Brown,"AWS, Docker, Kubernetes","System Administrator, Cloud Engineer",6,"Cloud infrastructure specialist with focus on containerization and CI/CD pipelines." 
