@@ -6,84 +6,75 @@ import traceback
 from flask import Blueprint, request, jsonify
 import uuid
 
-# Import the CandidatesManager (assuming it exists similar to InterviewsManager)
-# from candidates_manager import CandidatesManager
+# Import the CandidatesManager
+from candidates_manager import CandidatesManager
 
 # Create a blueprint for the candidates route
 candidates_bp = Blueprint('candidates', __name__, url_prefix='/candidates')
 
-@candidates_bp.route('/', methods=['POST'])
+@candidates_bp.route('/sync/candidates/', methods=['POST'])
 def sync_candidates():
-    """
-    Handle POST requests to sync candidates from Merge API or from a CSV file.
+    """Sync candidates from Merge API or CSV.
     
     Expected JSON body:
     {
-        "user_id": "string (required)",
-        "organization_id": "string (required)",
-        "csv_file": "base64-encoded CSV content (for CSV import mode)",
-        "test_mode": "boolean (optional, default: false)"
+        "user_id": str,           # Required - The user ID
+        "organization_id": str,   # Required - The organization ID
+        "csv_file": str,          # Optional - Base64 encoded CSV file
+        "test_mode": bool         # Optional - If true, use test data
     }
     
+    Headers:
+    - Authorization: Bearer <token> - User's auth token or a Merge account token
+    
     Returns:
-    JSON response with status and results
+        JSON response with status and counts
     """
-    logging.info("Received request to sync candidates")
+    logger.info(f"Received request to sync candidates")
     
-    # Check if we have JSON data
+    # Extract request data
     if not request.is_json:
-        logging.error("Request is not JSON")
-        return jsonify({"status": "error", "message": "Request must be JSON"}), 400
-        
-    data = request.get_json()
-    
-    # Validate required fields
-    required_fields = ["user_id", "organization_id"]
-    missing_fields = [field for field in required_fields if field not in data]
-    
-    if missing_fields:
-        logging.error(f"Missing required fields: {missing_fields}")
+        logger.error("Request must be JSON")
         return jsonify({
             "status": "error",
-            "message": f"Missing required fields: {missing_fields}"
+            "message": "Request must be JSON"
         }), 400
     
-    user_id = data["user_id"]
-    organization_id = data["organization_id"]
-    test_mode = data.get("test_mode", False)
+    data = request.json
+    logger.debug(f"Request data: {data}")
     
-    # Initialize the CandidatesManager (replace this when actual manager is available)
-    # candidates_manager = CandidatesManager(user_id, organization_id)
+    # Validate required fields
+    required_fields = ['user_id', 'organization_id']
+    for field in required_fields:
+        if field not in data:
+            error_id = str(uuid.uuid4())
+            logger.error(f"Error {error_id}: Missing required field: {field}")
+            return jsonify({
+                "status": "error",
+                "error_id": error_id,
+                "message": f"Missing required field: {field}"
+            }), 400
     
-    # For demonstration purposes, simulate CandidatesManager
-    class DummyCandidatesManager:
-        def __init__(self, user_id, organization_id):
-            self.user_id = user_id
-            self.organization_id = organization_id
-            
-        def import_from_csv(self, csv_file):
-            logging.info(f"Importing candidates from CSV: {csv_file}")
-            # In a real implementation, this would import candidates from the CSV file
-            return {"inserted": 5, "updated": 2}
-            
-        def import_from_merge(self, test_mode=False):
-            logging.info(f"Importing candidates from Merge API (test_mode={test_mode})")
-            # In a real implementation, this would import candidates from the Merge API
-            return {"inserted": 3, "updated": 1}
+    # Extract token from Authorization header
+    user_token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        user_token = auth_header.split('Bearer ')[1].strip()
     
-    # Use the dummy manager for now
-    candidates_manager = DummyCandidatesManager(user_id, organization_id)
-    
+    # Create manager
     try:
-        # Process CSV file if provided
-        if "csv_file" in data and data["csv_file"]:
-            logging.info("Processing CSV import mode")
+        manager = CandidatesManager()
+        
+        # Check if CSV file is provided
+        if data.get('csv_file'):
+            # Handle CSV import
+            logger.info("Processing CSV import mode")
             
             # Decode the base64 content
             try:
-                csv_content = base64.b64decode(data["csv_file"]).decode('utf-8')
+                csv_content = base64.b64decode(data["csv_file"])
             except Exception as e:
-                logging.error(f"Error decoding CSV content: {str(e)}")
+                logger.error(f"Error decoding CSV content: {str(e)}")
                 return jsonify({
                     "status": "error",
                     "message": f"Error decoding CSV content: {str(e)}"
@@ -92,12 +83,12 @@ def sync_candidates():
             # Write to a temporary file
             temp_file = None
             try:
-                with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.csv') as f:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as f:
                     f.write(csv_content)
                     temp_file = f.name
                     
                 # Import from the CSV file
-                result = candidates_manager.import_from_csv(temp_file)
+                result = manager.import_from_csv(temp_file, data['user_id'], data['organization_id'])
                 
                 return jsonify({
                     "status": "success",
@@ -111,8 +102,18 @@ def sync_candidates():
                     os.unlink(temp_file)
         else:
             # Import from Merge API
-            logging.info("Processing Merge API import mode")
-            result = candidates_manager.import_from_merge(test_mode=test_mode)
+            logger.info(f"Importing candidates from Merge API")
+            
+            # Fetch candidates using the provided user token
+            test_mode = data.get('test_mode', False)
+            candidates = manager.fetch_merge_candidates(
+                data['user_id'], 
+                data['organization_id'],
+                user_token=user_token,
+                test_mode=test_mode
+            )
+            
+            result = manager.upsert_candidates(candidates)
             
             return jsonify({
                 "status": "success",
@@ -120,10 +121,20 @@ def sync_candidates():
                 "inserted": result.get("inserted", 0),
                 "updated": result.get("updated", 0)
             })
+    except ValueError as e:
+        # Handle expected validation errors
+        error_id = str(uuid.uuid4())
+        logger.error(f"Validation error (ID: {error_id}): {str(e)}")
+        
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "error_id": error_id
+        }), 400
     except Exception as e:
         error_id = str(uuid.uuid4())
-        logging.error(f"Error ID: {error_id} - {str(e)}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error ID: {error_id} - {str(e)}")
+        logger.error(traceback.format_exc())
         
         return jsonify({
             "status": "error",
