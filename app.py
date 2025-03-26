@@ -53,14 +53,12 @@ except ImportError as e:
 
 # Register blueprints
 try:
-    from routes import interviews_bp, candidates_bp, applications_bp, job_postings_bp
-    app.register_blueprint(interviews_bp, url_prefix='/sync')
-    app.register_blueprint(candidates_bp, url_prefix='/sync')
-    app.register_blueprint(applications_bp, url_prefix='/sync')
-    app.register_blueprint(job_postings_bp, url_prefix='/sync')
-    logger.info("Registered API route blueprints")
+    from routes import sync_bp
+    app.register_blueprint(sync_bp)
+    logger.info("Successfully registered sync blueprint")
 except ImportError as e:
-    logger.error(f"Failed to register one or more blueprints: {str(e)}")
+    logger.error(f"Error importing blueprints: {str(e)}")
+    logger.warning("Using fallback routes since blueprint registration failed")
 
 @app.route('/', methods=['GET'])
 def health_check():

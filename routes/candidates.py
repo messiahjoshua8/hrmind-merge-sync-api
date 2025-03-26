@@ -12,7 +12,7 @@ from candidates_manager import CandidatesManager
 # Create a blueprint for the candidates route
 candidates_bp = Blueprint('candidates', __name__, url_prefix='/candidates')
 
-@candidates_bp.route('/sync/candidates/', methods=['POST'])
+@candidates_bp.route('/', methods=['POST'])
 def sync_candidates():
     """Sync candidates from Merge API or CSV.
     

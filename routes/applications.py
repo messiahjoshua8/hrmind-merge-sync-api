@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Create a blueprint for applications routes
 applications_bp = Blueprint('applications', __name__, url_prefix='/applications')
 
-@applications_bp.route('/sync/applications/', methods=['POST'])
+@applications_bp.route('/', methods=['POST'])
 def sync_applications():
     """Sync applications from Merge API or CSV.
     
